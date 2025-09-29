@@ -1,0 +1,1 @@
+Exception: 'NoneType' object has no attribute 'cursor'

@@ -1,7 +1,7 @@
 from sys import argv, stdin, stdout, stderr
 import sqlite3, signal, time
 from os import path
-
+from random import randrange
 from util import *
 
 signal.signal(signal.SIGTERM, safe_stop)
@@ -26,23 +26,27 @@ if path.exists(project_comlink_dir):
 
 tracker = 0
 
-test_comments = {
-}
-
 
 def create_comment(comment) -> None:
     log(f"Creating comment: {comment}")
     global tracker
     comment_id = tracker
-    stdout.write(f'~{comment_id}\n')
+    stdout.write(f'ID~{comment_id}\n')
     stdout.flush()
-    test_comments.update({str(tracker):comment})
     tracker += 1
 
 
+def get_comment(id:str) -> str:
+    return f'{id} is not a valid id'
+
+
 try:
-    while True:
+    while True: 
         line = stdin.readline()
         line = line.strip()
         if not line: continue
+        if line[0] == '~':
+            create_comment(line)
+            continue
+            
 except Exception as e: safe_stop('error', e)
