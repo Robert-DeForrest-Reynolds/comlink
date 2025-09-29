@@ -1,11 +1,18 @@
 from sys import stdin
-from os import getcwd, path
+from os import getcwd, path, killpg, getpgid, _exit
 import asyncio, signal
 from asyncio.subprocess import PIPE, Process
 
 
 class ExampleAPI:
     process:Process
+    event_loop:asyncio.AbstractEventLoop
+
+
+    def __init__(_):
+        _.stopping = False
+
+
     async def start_comlink(_):
         _.process = await asyncio.create_subprocess_exec(
             'python', path.join('src', 'comlink.py'), getcwd(),
@@ -16,36 +23,39 @@ class ExampleAPI:
 
 
     async def handle_comlink_input(_):
-        loop = asyncio.get_event_loop()
-        while True:
-            line = await loop.run_in_executor(None, stdin.readline)
-            if not line: continue
-            if line == 'stop':
-                _.process.stdin.write('close\n')
-                break
-            _.process.stdin.write(line.encode())
-            await _.process.stdin.drain()
+        try:
+            while True:
+                line:str = await _.loop.run_in_executor(None, stdin.readline)
+                if not line:
+                    continue
+                line = line.strip()
+                _.process.stdin.write((line + "\n").encode())
+                await _.process.stdin.drain()
+        except asyncio.CancelledError:
+            pass
 
 
     async def handle_comlink_output(_):
-        while True:
-            err = await _.process.stderr.readline()
-            if err:
-                print(f"[DEBUG] {err.decode().strip()}")
-                continue
-
-            line = await _.process.stdout.readline()
-            line = line.decode()
-            if not line:break
-            if line.startswith("~"):
-                print(f"[Comment]: {line}")
-            else:
-                print(f"[REPLY]: {line}")
+        try:
+            while True:
+                line = await _.process.stdout.readline()
+                if not line:
+                    break
+                line = line.decode().strip()
+                if line.startswith("~"):
+                    print(f"[Comment]: {line}")
+                else:
+                    print(f"[REPLY]: {line}")
+        except asyncio.CancelledError:
+            pass
 
 
     async def main(_):
         print("Starting ExampleAPI")
         await _.start_comlink()
+        _.loop = asyncio.get_event_loop()
+        _.loop.add_signal_handler(signal.SIGINT, lambda: asyncio.create_task(_.send_stop()))
+        _.loop.add_signal_handler(signal.SIGTERM, lambda: asyncio.create_task(_.send_stop()))
         print("Gathering...")
         await asyncio.gather(
             _.handle_comlink_output(),
@@ -54,20 +64,19 @@ class ExampleAPI:
         print("Closing ExampleAPI...")
 
 
-    async def send_comment():
-        pass
+    async def send_stop(_):
+        if _.stopping: return
+        _.stopping = True
+        print("\nStopping ExampleAPI, sending SIGTERM to comlink")
+        if _.process:
+            try:
+                killpg(getpgid(_.process.pid), signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            await _.process.wait()
+        _exit(0)
 
-
-    def send_stop(_, param1, param2):
-        print(f"{param1}, {param2}")
-        _.process.stdin.write('close\n'.encode())
-        exit(1)
     
 
 instance = ExampleAPI()
-
-signal.signal(signal.SIGINT, instance.send_stop)
-signal.signal(signal.SIGTERM, instance.send_stop)
-
-# run the api as an asynchronous process
 asyncio.run(instance.main())

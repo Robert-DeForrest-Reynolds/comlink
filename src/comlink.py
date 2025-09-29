@@ -1,8 +1,10 @@
 from sys import argv, stdin, stdout, stderr
-import sqlite3, atexit, signal, time
+import sqlite3, signal, time
 from os import path
 
 from util import *
+
+signal.signal(signal.SIGTERM, safe_stop)
 
 workspace_path = argv[1]
 project_comlink_dir = path.join(workspace_path, 'comlink')
@@ -37,29 +39,10 @@ def create_comment(comment) -> None:
     test_comments.update({str(tracker):comment})
     tracker += 1
 
-def cleanup():
-    print("Cleaning up before exit...", file=stderr)
-    # Save state, close DB, flush logs, etc.
-
-atexit.register(cleanup)
-
-def signal_handler(signum, frame):
-    print(f"Signal {signum} received...", file=stderr)
-    exit(0)
-
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
 
 try:
     while True:
         line = stdin.readline()
-        if line == '':
-            time.sleep(0.1)  # EOF idle
-            continue
         line = line.strip()
-        if not line:
-            continue
-        # handle comments, etc.
-finally:
-    with open("test.txt" , 'w') as test:
-        test.write("hello there")
+        if not line: continue
+except Exception as e: safe_stop('error', e)
