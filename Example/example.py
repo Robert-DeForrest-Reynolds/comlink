@@ -69,7 +69,6 @@ class ExampleAPI:
             await _.process.wait()
         
         _exit(0)
-
     
 
 instance = ExampleAPI()
