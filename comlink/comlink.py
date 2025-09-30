@@ -1,6 +1,7 @@
-from sys import argv, stdin, stdout, stderr
+from io import TextIOWrapper
+from sys import argv, stdin, stdout, stderr, exit
 import sqlite3, signal, time
-from os import path
+from os import path, environ
 import util
 
 
@@ -9,6 +10,7 @@ class comlink:
     project_name:str
     project_comlink_dir:str
     project_loaded:bool = False
+    logfile:TextIOWrapper
     def __init__(_):
         signal.signal(signal.SIGTERM, util.safe_stop)
 
@@ -26,6 +28,10 @@ class comlink:
         _.tracker = 0
 
         _.mainloop()
+
+
+    def open_logfile(_) -> None: _.logfile = open("comlink-log.txt")
+    def close_logfile(_) -> None: _.logfile.close()
 
 
     def load_project_comlink(_):
@@ -67,6 +73,24 @@ class comlink:
 
     def get_comment(id:str) -> str:
         return f'{id} is not a valid id'
+    
+
+    def safe_stop(_, *args):
+        if environ.get('stopped'): return
+        environ.update({'stopped':"1"})
+        if args:
+            if args[0] == 'error':
+                with open("ErrorLog.txt" , 'w') as test:
+                    test.write(f"Exception: {args[1]}")
+                    test.flush()
+            else:
+                signal_number = args[0]
+                frame = args[1]
+                with open("CleanupLog.txt" , 'w') as test:
+                    test.write(f"{signal_number}\n{frame}")
+                    test.flush()
+        _.close_logfile()
+        exit(0)
 
 
     def mainloop(_):
