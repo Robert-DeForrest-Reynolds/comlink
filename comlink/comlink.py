@@ -14,21 +14,19 @@ class comlink:
     tracker:int = 0
     database:sqlite3.Connection
     def __init__(_):
+        _.open_logfile()
+
         _.project_dir = argv[1]
 
         if _.project_dir[-1] == '\\':
             _.project_name:str = path.basename(path.normpath(_.project_dir))
         else:
             _.project_name:str = path.basename(_.project_dir)
-        
-        _.open_logfile()
-
         _.log(f'project name: {_.project_name}')
 
         _.load_project_comlink()
 
         _.tracker = 0
-
         _.commands = {
             'init': _.load_project_comlink
         }
@@ -59,11 +57,8 @@ class comlink:
             return
         else:
             _.log(f'project comlink dir path: {_.project_comlink_dir}')
-
             _.db_path = path.join(_.project_comlink_dir, f'{_.project_dir}.db')
-
             _.log(f'comlink.db path: {_.project_comlink_dir}')
-            
             _.connect_db()
 
 
@@ -95,8 +90,7 @@ class comlink:
 
         _.log('Executing safe stop...')
 
-        try:
-            _.close_logfile()
+        try: _.close_logfile()
         except Exception as e:
             stderr.write(f"Error closing logfile: {e}")
             stderr.flush()
@@ -106,10 +100,8 @@ class comlink:
 
         time.sleep(0.1) # lil buffer boy
         
-        if error:
-            raise error
-        else:
-            exit(0)
+        if error: raise error
+        else: exit(0)
 
 
     def mainloop(_):
