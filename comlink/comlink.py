@@ -29,6 +29,10 @@ class comlink:
 
         _.tracker = 0
 
+        _.commands = {
+            'init': _.load_project_comlink
+        }
+
         _.mainloop()
 
 
@@ -44,6 +48,7 @@ class comlink:
 
 
     def load_project_comlink(_):
+        _.log("Loading project's comlink database...")
         if _.project_loaded: return
         if not _.project_loaded: _.project_loaded = True
         _.log("Loading project related comlink")
@@ -64,6 +69,7 @@ class comlink:
 
     def connect_db(_):
         _.database = sqlite3.connect(path.join(_.project_comlink_dir, f'{_.project_name}.db'))
+        _.log("Database connected")
 
 
     def increment_and_send_id(_):
@@ -83,24 +89,27 @@ class comlink:
         return f'{id} is not a valid id'
     
 
-    def safe_stop(_):
+    def safe_stop(_, error=None):
         if environ.get('stopped'): return
         environ.update({'stopped':"1"})
 
         _.log('Executing safe stop...')
-        stdout.flush()
-        stderr.flush()
 
         try:
             _.close_logfile()
         except Exception as e:
-            print(f"Error closing logfile: {e}", file=stderr)
+            stderr.write(f"Error closing logfile: {e}")
+            stderr.flush()
 
-        _.log('Safe stop completed')
+        stderr.write("Seemed to safely stop comlink")
+        stderr.flush()
 
         time.sleep(0.1) # lil buffer boy
         
-        exit(0)
+        if error:
+            raise error
+        else:
+            exit(0)
 
 
     def mainloop(_):
@@ -109,13 +118,11 @@ class comlink:
                 line = stdin.readline()
                 if not line: continue
                 line = line.strip()
-                if line == '~':
-                    _.safe_stop()
-                if line == '*':
-                    _.load_project_comlink()
-                elif line.startswith('~'):
-                    _.create_comment(line)
-        except KeyboardInterrupt:
-            _.safe_stop('signal', signal.SIGINT, None)
+                if line == '!':             _.safe_stop()
+                elif line == '*':           _.load_project_comlink()
+                elif line[0] == '~':  _.create_comment(line)
+                elif line[0] == '>':  _.commands[line[1:].strip()]()
+        except KeyboardInterrupt as e:
+            _.safe_stop(e)
         except Exception as e:
-            _.safe_stop('error', e)
+            _.safe_stop(e)
