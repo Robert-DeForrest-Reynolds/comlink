@@ -66,14 +66,11 @@ class comlink:
             data = comlink_file.readlines()
             _.current_id = int(data[0].split('=')[1])
             _.log(f"Current current_id Value: {_.current_id}")
-            _.empty_ids = [id for id in data[1].split('=')[1].split(',')]
-            _.log(f"Current Empty IDs: {_.empty_ids}")
 
 
     def save_comlink_file(_):
         with open(_.comlink_file, 'w+') as comlink_file:
-            comlink_file.write(f'current_id={_.current_id}\n'+
-                               f'empty={",".join(_.empty_ids)}')
+            comlink_file.write(f'current_id={_.current_id}')
 
 
     def load_project_comlink(_):
