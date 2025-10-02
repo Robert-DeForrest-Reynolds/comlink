@@ -85,8 +85,7 @@ class comlink:
             _.load_comlink_file()
         else:
             with open(_.comlink_file, 'w+') as comlink_file:
-                comlink_file.write('current_id=0'+
-                                   'empty=')
+                comlink_file.write('current_id=0')
 
 
         _.project_comlink_dir = path.join(_.project_dir, 'comlink')
