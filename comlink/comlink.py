@@ -1,17 +1,18 @@
 from io import TextIOWrapper
 from sys import argv, stdin, stdout, stderr, exit
-import sqlite3, signal, time
+import sqlite3, time
 from os import path, environ
-import atexit
 
 
 class comlink:
     project_dir:str
     project_name:str
+    comlink_file:str
     project_comlink_dir:str
     project_loaded:bool = False
     logfile:TextIOWrapper
     tracker:int = 0
+    empty_ids:list[str]
     database:sqlite3.Connection
     def __init__(_):
         _.open_logfile()
@@ -24,9 +25,9 @@ class comlink:
             _.project_name:str = path.basename(_.project_dir)
         _.log(f'project name: {_.project_name}')
 
-        _.load_project_comlink()
-
         _.tracker = 0
+        _.empty_ids = []
+        _.load_project_comlink()
         _.commands = {
             'init': _.load_project_comlink
         }
@@ -50,6 +51,17 @@ class comlink:
         if _.project_loaded: return
         if not _.project_loaded: _.project_loaded = True
         _.log("Loading project related comlink")
+
+
+        _.comlink_file = path.join(_.project_dir, 'comlink', '.comlink')
+        if path.exists(_.comlink_file):\
+            _.load_comlink_file()
+        else:
+            with open(_.comlink_file, 'w+') as comlink_file:
+                comlink_file.write('tracker=0'+
+                                   'empty=')
+
+
         _.project_comlink_dir = path.join(_.project_dir, 'comlink')
 
         if not path.exists(_.project_comlink_dir):
@@ -65,30 +77,67 @@ class comlink:
     def connect_db(_):
         _.database = sqlite3.connect(path.join(_.project_comlink_dir, f'{_.project_name}.db'))
         _.log("Database connected")
+        cursor = _.database.cursor()
+        cursor.execute(f"CREATE TABLE IF NOT EXISTS {_.project_name}_comments(id PRIMARY KEY, comment TEXT)")
 
 
-    def increment_and_send_id(_):
-        stdout.write(f'ID~{_.tracker}\n')
-        stdout.flush()
-        _.tracker += 1
+    def load_comlink_file(_):
+        _.log("Loading comlink file...")
+        with open(_.comlink_file, 'r') as comlink_file:
+            data = comlink_file.readlines()
+            _.tracker = int(data[0].split('=')[1])
+            _.log(f"Current Tracker Value: {_.tracker}")
+            _.empty_ids = [id for id in data[1].split('=')[1].split(',')]
+            _.log(f"Current Empty IDs: {_.empty_ids}")
 
 
-    def create_comment(_, comment) -> None:
+    def save_comlink_file(_):
+        with open(_.comlink_file, 'w+') as comlink_file:
+            comlink_file.write(f'tracker={_.tracker}\n'+
+                               f'empty={",".join(_.empty_ids)}')
+
+
+    def get_comment(_, id:str) -> tuple:
+        read_cursor = _.database.cursor()
+        read_cursor.execute(f"SELECT comment FROM {_.project_name}_comments WHERE id=?", (id,))
+        comment = read_cursor.fetchone()
+        return comment
+
+
+    def create_comment__send_id(_, comment) -> None:
         _.log(f"Creating comment: {comment}")
-        _.increment_and_send_id()
-        write_cursor = _.database.cursor()
-        write_cursor.execute("INSERT INTO comments ")
+        id = str(_.tracker)
+        potential_comment = _.get_comment(id)
+        if potential_comment is None:
+            stdout.write(f'ID:{id}\n')
+            stdout.flush()
+            write_cursor = _.database.cursor()
+            write_cursor.execute(f"INSERT INTO {_.project_name}_comments VALUES (?,?)", (id, comment))
+            _.database.commit()
+            _.tracker += 1
+            _.save_comlink_file()
+        else:
+            _.log("ID already exists in comlink database.")
 
 
-    def get_comment(_, id:str) -> str:
-        return f'{id} is not a valid id'
-    
+    def get__send_comment(_, id:str):
+        comment = _.get_comment(id)
+        if comment is None:
+            _.log("Could not find comment")
+            stdout.write(f'{id} is not a valid id\n')
+            stdout.flush()
+        else:
+            stdout.write(f'{comment[0]}\n')
+            stdout.flush()
+
 
     def safe_stop(_, error=None):
         if environ.get('stopped'): return
         environ.update({'stopped':"1"})
 
         _.log('Executing safe stop...')
+
+        _.save_comlink_file()
 
         try: _.close_logfile()
         except Exception as e:
@@ -110,9 +159,10 @@ class comlink:
                 line = stdin.readline()
                 if not line: continue
                 line = line.strip()
-                if line == '!':             _.safe_stop()
-                elif line == '*':           _.load_project_comlink()
-                elif line[0] == '~':  _.create_comment(line)
+                if line[0] == '@':    _.get__send_comment(line[1:])
+                elif line == '!':     _.safe_stop()
+                elif line == '*':     _.load_project_comlink()
+                elif line[0] == '~':  _.create_comment__send_id(line[1:])
                 elif line[0] == '>':  _.commands[line[1:].strip()]()
         except KeyboardInterrupt as e:
             _.safe_stop(e)
