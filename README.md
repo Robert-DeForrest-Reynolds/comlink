@@ -18,3 +18,9 @@ Because I think documentation, and commenting is important. The thing is, it's i
 As well, for incredibly large, and convoluted projects, it could prove very fruitful to have a heavily-detailed documentation embedded within the source files, but bloating the files themselves has always been a problem.
 
 I made comlink to try to solve that problem, and well, just because I wanted to. I find this tool very useful myself, and that's enough to make it.
+
+### Plans
+ - Implement a higher ceiling for the unique ID encoding.
+ - Neovim plugin
+ - Rewrite from Python to C, or implementing in C and creating bindings bare minimum.
+ - QoL cleaning utilities for pruning, and reordering.
