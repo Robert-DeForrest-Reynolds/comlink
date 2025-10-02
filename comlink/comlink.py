@@ -16,6 +16,8 @@ class comlink:
     database:sqlite3.Connection
     char_set:list[str] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     base:int = len(char_set)
+
+    
     def __init__(_):
         _.open_logfile()
 
@@ -63,6 +65,31 @@ class comlink:
         return n
 
 
+    def connect_db(_):
+        _.database = sqlite3.connect(path.join(_.project_comlink_dir,
+                                               f'{_.project_name}.db'))
+        _.log("Database connected")
+        cursor = _.database.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS"+
+                       f"{_.project_name}_comments(id PRIMARY KEY, comment TEXT)")
+
+
+    def load_comlink_file(_):
+        _.log("Loading comlink file...")
+        with open(_.comlink_file, 'r') as comlink_file:
+            data = comlink_file.readlines()
+            _.current_id = int(data[0].split('=')[1])
+            _.log(f"Current current_id Value: {_.current_id}")
+            _.empty_ids = [id for id in data[1].split('=')[1].split(',')]
+            _.log(f"Current Empty IDs: {_.empty_ids}")
+
+
+    def save_comlink_file(_):
+        with open(_.comlink_file, 'w+') as comlink_file:
+            comlink_file.write(f'current_id={_.current_id}\n'+
+                               f'empty={",".join(_.empty_ids)}')
+
+
     def load_project_comlink(_):
         _.log("Loading project's comlink database...")
         if _.project_loaded: return
@@ -91,32 +118,10 @@ class comlink:
             _.connect_db()
 
 
-    def connect_db(_):
-        _.database = sqlite3.connect(path.join(_.project_comlink_dir, f'{_.project_name}.db'))
-        _.log("Database connected")
-        cursor = _.database.cursor()
-        cursor.execute(f"CREATE TABLE IF NOT EXISTS {_.project_name}_comments(id PRIMARY KEY, comment TEXT)")
-
-
-    def load_comlink_file(_):
-        _.log("Loading comlink file...")
-        with open(_.comlink_file, 'r') as comlink_file:
-            data = comlink_file.readlines()
-            _.current_id = int(data[0].split('=')[1])
-            _.log(f"Current current_id Value: {_.current_id}")
-            _.empty_ids = [id for id in data[1].split('=')[1].split(',')]
-            _.log(f"Current Empty IDs: {_.empty_ids}")
-
-
-    def save_comlink_file(_):
-        with open(_.comlink_file, 'w+') as comlink_file:
-            comlink_file.write(f'current_id={_.current_id}\n'+
-                               f'empty={",".join(_.empty_ids)}')
-
-
     def get_comment(_, id:str) -> tuple:
         read_cursor = _.database.cursor()
-        read_cursor.execute(f"SELECT comment FROM {_.project_name}_comments WHERE id=?", (id,))
+        read_cursor.execute(f"SELECT comment FROM {_.project_name}_comments WHERE id=?",
+                            (id,))
         comment = read_cursor.fetchone()
         return comment
 
@@ -129,7 +134,8 @@ class comlink:
             stdout.write(f'ID:{id_str}\n')
             stdout.flush()
             write_cursor = _.database.cursor()
-            write_cursor.execute(f"INSERT INTO {_.project_name}_comments VALUES (?,?)", (_.current_id, comment))
+            write_cursor.execute(f"INSERT INTO {_.project_name}_comments VALUES (?,?)",
+                                 (_.current_id, comment))
             _.database.commit()
             _.current_id += 1
             _.save_comlink_file()
