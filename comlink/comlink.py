@@ -38,6 +38,9 @@ class comlink:
         _.mainloop()
 
 
+    @property
+    def table_name(_) -> str: return f'{_.project_name}_comments'
+
     def open_logfile(_) -> None: _.logfile = open("comlink-log.txt", 'w+')
     def close_logfile(_) -> None: _.logfile.close()
 
@@ -49,29 +52,12 @@ class comlink:
         print(msg, file=stderr, flush=True)
 
 
-    def encode_id(_, id: int) -> str:
-        if id == 0: return _.char_set[0]
-        chars = ''
-        while id > 0:
-            id, index = divmod(id, _.base)
-            chars += _.char_set[index]
-        return chars[::-1]
-
-
-    def decode_id(_, encoded_id: str) -> int:
-        n = 0
-        for char in encoded_id:
-            n = n * _.base + _.char_set.index(char)
-        return n
-
-
     def connect_db(_):
         _.database = sqlite3.connect(path.join(_.project_comlink_dir,
                                                f'{_.project_name}.db'))
         _.log("Database connected")
         cursor = _.database.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS"+
-                       f"{_.project_name}_comments(id PRIMARY KEY, comment TEXT)")
+        cursor.execute(f"CREATE TABLE IF NOT EXISTS {_.table_name}(id PRIMARY KEY, comment TEXT)")
 
 
     def load_comlink_file(_):
@@ -118,10 +104,25 @@ class comlink:
             _.connect_db()
 
 
-    def get_comment(_, id:str) -> tuple:
+    def encode_id(_, id: int) -> str:
+        if id == 0: return _.char_set[0]
+        chars = ''
+        while id > 0:
+            id, index = divmod(id, _.base)
+            chars += _.char_set[index]
+        return chars[::-1]
+
+
+    def decode_id(_, encoded_id: str) -> int:
+        n = 0
+        for char in encoded_id:
+            n = n * _.base + _.char_set.index(char)
+        return n
+
+
+    def get_comment(_, id:int) -> tuple:
         read_cursor = _.database.cursor()
-        read_cursor.execute(f"SELECT comment FROM {_.project_name}_comments WHERE id=?",
-                            (id,))
+        read_cursor.execute(f"SELECT comment FROM {_.table_name} WHERE id=?", (id,))
         comment = read_cursor.fetchone()
         return comment
 
@@ -134,7 +135,7 @@ class comlink:
             stdout.write(f'ID:{id_str}\n')
             stdout.flush()
             write_cursor = _.database.cursor()
-            write_cursor.execute(f"INSERT INTO {_.project_name}_comments VALUES (?,?)",
+            write_cursor.execute(f"INSERT INTO {_.table_name} VALUES (?,?)",
                                  (_.current_id, comment))
             _.database.commit()
             _.current_id += 1
@@ -153,6 +154,16 @@ class comlink:
         else:
             stdout.write(f'{comment[0]}\n')
             stdout.flush()
+
+
+    def delete_comment(_, id_string:str):
+        id = _.decode_id(id_string)
+        comment = _.get_comment(id)
+        if comment is not None:
+            delete_cursor = _.database.cursor()
+            delete_cursor.execute(f"DELETE FROM {_.table_name} WHERE id=?", (id,))
+            _.database.commit()
+            _.log(f"Deleted {id_string}:{id} from database")
 
 
     def safe_stop(_, error=None):
@@ -187,6 +198,7 @@ class comlink:
                 elif line == '!':     _.safe_stop()
                 elif line == '*':     _.load_project_comlink()
                 elif line[0] == '~':  _.create_comment__send_id(line[1:])
+                elif line[0] == '&':  _.delete_comment(line[1:])
                 elif line[0] == '>':  _.commands[line[1:].strip()]()
         except KeyboardInterrupt as e:
             _.safe_stop(e)
