@@ -11,9 +11,11 @@ class comlink:
     project_comlink_dir:str
     project_loaded:bool = False
     logfile:TextIOWrapper
-    tracker:int = 0
+    current_id:int = 0
     empty_ids:list[str]
     database:sqlite3.Connection
+    char_set:list[str] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    base:int = len(char_set)
     def __init__(_):
         _.open_logfile()
 
@@ -25,8 +27,7 @@ class comlink:
             _.project_name:str = path.basename(_.project_dir)
         _.log(f'project name: {_.project_name}')
 
-        _.tracker = 0
-        _.empty_ids = []
+        _.current_id = 0
         _.load_project_comlink()
         _.commands = {
             'init': _.load_project_comlink
@@ -46,6 +47,22 @@ class comlink:
         print(msg, file=stderr, flush=True)
 
 
+    def encode_id(_, id: int) -> str:
+        if id == 0: return _.char_set[0]
+        chars = ''
+        while id > 0:
+            id, index = divmod(id, _.base)
+            chars += _.char_set[index]
+        return chars[::-1]
+
+
+    def decode_id(_, encoded_id: str) -> int:
+        n = 0
+        for char in encoded_id:
+            n = n * _.base + _.char_set.index(char)
+        return n
+
+
     def load_project_comlink(_):
         _.log("Loading project's comlink database...")
         if _.project_loaded: return
@@ -58,7 +75,7 @@ class comlink:
             _.load_comlink_file()
         else:
             with open(_.comlink_file, 'w+') as comlink_file:
-                comlink_file.write('tracker=0'+
+                comlink_file.write('current_id=0'+
                                    'empty=')
 
 
@@ -85,15 +102,15 @@ class comlink:
         _.log("Loading comlink file...")
         with open(_.comlink_file, 'r') as comlink_file:
             data = comlink_file.readlines()
-            _.tracker = int(data[0].split('=')[1])
-            _.log(f"Current Tracker Value: {_.tracker}")
+            _.current_id = int(data[0].split('=')[1])
+            _.log(f"Current current_id Value: {_.current_id}")
             _.empty_ids = [id for id in data[1].split('=')[1].split(',')]
             _.log(f"Current Empty IDs: {_.empty_ids}")
 
 
     def save_comlink_file(_):
         with open(_.comlink_file, 'w+') as comlink_file:
-            comlink_file.write(f'tracker={_.tracker}\n'+
+            comlink_file.write(f'current_id={_.current_id}\n'+
                                f'empty={",".join(_.empty_ids)}')
 
 
@@ -106,21 +123,22 @@ class comlink:
 
     def create_comment__send_id(_, comment) -> None:
         _.log(f"Creating comment: {comment}")
-        id = str(_.tracker)
-        potential_comment = _.get_comment(id)
+        potential_comment = _.get_comment(_.current_id)
         if potential_comment is None:
-            stdout.write(f'ID:{id}\n')
+            id_str = _.encode_id(_.current_id)
+            stdout.write(f'ID:{id_str}\n')
             stdout.flush()
             write_cursor = _.database.cursor()
-            write_cursor.execute(f"INSERT INTO {_.project_name}_comments VALUES (?,?)", (id, comment))
+            write_cursor.execute(f"INSERT INTO {_.project_name}_comments VALUES (?,?)", (_.current_id, comment))
             _.database.commit()
-            _.tracker += 1
+            _.current_id += 1
             _.save_comlink_file()
         else:
             _.log("ID already exists in comlink database.")
 
 
-    def get__send_comment(_, id:str):
+    def get__send_comment(_, id_string:str):
+        id = _.decode_id(id_string)
         comment = _.get_comment(id)
         if comment is None:
             _.log("Could not find comment")
